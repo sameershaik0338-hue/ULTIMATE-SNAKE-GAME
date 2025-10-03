@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ultimate Snake Game</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      overflow: hidden;
+      color: #fff;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin: 10px 0;
+      text-shadow: 0 0 8px #06b6d4;
+    }
+
+    canvas {
+      background: #0b1020;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.7);
+      max-width: 95vw;
+      max-height: 70vh;
+    }
+
+    #controls, #settings {
+      margin: 10px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    select, button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #06b6d4;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #mobile-controls {
+      margin-top: 15px;
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      grid-template-rows: repeat(3, 60px);
+      gap: 6px;
+      justify-content: center;
+    }
+
+    #mobile-controls button {
+      border-radius: 50%;
+      background: #1e40af;
+      font-size: 1.2rem;
+    }
+
+    #mobile-controls button:active {
+      background: #2563eb;
+    }
+
+    .popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: rgba(15, 23, 42, 0.95);
+      padding: 20px 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #06b6d4;
+      text-align: center;
+      animation: popupFade 0.6s ease forwards;
+      z-index: 1000;
+    }
+
+    @keyframes popupFade {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <h1>🐍 Ultimate Snake Game 🐍</h1>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  
+  <div id="settings">
+    <label>Speed:
+      <select id="speedSelect">
+        <option value="150">Low</option>
+        <option value="100">Medium</option>
+        <option value="70">High</option>
+      </select>
+    </label>
+    <label>Snake Color:
+      <select id="colorSelect">
+        <option value="red">Red</option>
+        <option value="green">Green</option>
+        <option value="blue">Blue</option>
+        <option value="yellow">Yellow</option>
+        <option value="orange">Orange</option>
+      </select>
+    </label>
+    <button id="startBtn">Start Game</button>
+  </div>
+
+  <div id="controls">
+    <button id="musicBtn">🎵 Music: On</button>
+    <button id="soundBtn">🔔 Sound: On</button>
+  </div>
+
+  <div id="mobile-controls">
+    <button data-dir="up">⬆️</button>
+    
+    <button data-dir="right">➡️</button><br>
+    <button data-dir="left">⬅️</button>
+    
+    <button data-dir="down">⬇️</button>
+  </div>
+
+  <div id="popup" class="popup" style="display:none;"></div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const speedSelect = document.getElementById("speedSelect");
+    const colorSelect = document.getElementById("colorSelect");
+    const startBtn = document.getElementById("startBtn");
+    const musicBtn = document.getElementById("musicBtn");
+    const soundBtn = document.getElementById("soundBtn");
+    const popup = document.getElementById("popup");
+
+    let gridSize = 20;
+    let snake, direction, food, speed, snakeColor;
+    let score = 0, highScore = 0;
+    let gameInterval;
+    let musicOn = true, soundOn = true;
+
+    const bgMusic = new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_7d4f2b5c7c.mp3?filename=retro-game-music-117399.mp3");
+    bgMusic.loop = true;
+    const eatSound = new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_1d1e839a63.mp3?filename=bonus-points-190040.mp3");
+
+    function showPopup(message) {
+      popup.innerHTML = message;
+      popup.style.display = "block";
+      setTimeout(() => popup.style.display = "none", 2000);
+    }
+
+    function resetGame() {
+      snake = [{x: 5, y: 5}];
+      direction = "RIGHT";
+      placeFood();
+      score = 0;
+    }
+
+    function placeFood() {
+      food = {
+        x: Math.floor(Math.random() * (canvas.width / gridSize)),
+        y: Math.floor(Math.random() * (canvas.height / gridSize))
+      };
+    }
+
+    function drawSnake() {
+      ctx.fillStyle = snakeColor;
+      snake.forEach((part, index) => {
+        ctx.beginPath();
+        ctx.arc(
+          part.x * gridSize + gridSize/2,
+          part.y * gridSize + gridSize/2,
+          gridSize/2.2,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        if (index === 0) {
+          // eyes
+          ctx.fillStyle = "white";
+          ctx.beginPath();
+          ctx.arc(part.x*gridSize+6, part.y*gridSize+6, 2, 0, Math.PI*2);
+          ctx.arc(part.x*gridSize+14, part.y*gridSize+6, 2, 0, Math.PI*2);
+          ctx.fill();
+          // nose
+          ctx.fillStyle = "black";
+          ctx.beginPath();
+          ctx.arc(part.x*gridSize+10, part.y*gridSize+14, 2, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = snakeColor;
+        }
+      });
+    }
+
+    function drawFood() {
+      ctx.fillStyle = "gold";
+      ctx.beginPath();
+      ctx.arc(food.x * gridSize + gridSize/2, food.y * gridSize + gridSize/2, gridSize/2.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    function update() {
+      const head = {...snake[0]};
+      if (direction === "LEFT") head.x--;
+      if (direction === "RIGHT") head.x++;
+      if (direction === "UP") head.y--;
+      if (direction === "DOWN") head.y++;
+
+      if (head.x < 0 || head.y < 0 || head.x >= canvas.width/gridSize || head.y >= canvas.height/gridSize || snake.some(part => part.x === head.x && part.y === head.y)) {
+        clearInterval(gameInterval);
+        bgMusic.pause();
+        if (score > highScore) highScore = score;
+        showPopup("💀 Game Over<br>Better Luck Next Time<br>Score: " + score + "<br>High Score: " + highScore);
+        setTimeout(startGame, 2500);
+        return;
+      }
+
+      snake.unshift(head);
+
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        if (soundOn) eatSound.play();
+        placeFood();
+      } else {
+        snake.pop();
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawSnake();
+      drawFood();
+
+      ctx.fillStyle = "white";
+      ctx.font = "16px Arial";
+      ctx.fillText("Score: " + score, 10, 20);
+      ctx.fillText("High: " + highScore, canvas.width - 80, 20);
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+    }
+
+    function startGame() {
+      resetGame();
+      snakeColor = colorSelect.value;
+      speed = parseInt(speedSelect.value);
+      clearInterval(gameInterval);
+      gameInterval = setInterval(gameLoop, speed);
+      if (musicOn) bgMusic.play();
+      showPopup("🚀 Ready... Go!");
+    }
+
+    startBtn.addEventListener("click", () => {
+      showPopup("🎮 Welcome to Snake!");
+      setTimeout(startGame, 1500);
+    });
+
+    musicBtn.addEventListener("click", () => {
+      musicOn = !musicOn;
+      musicBtn.textContent = musicOn ? "🎵 Music: On" : "🎵 Music: Off";
+      if (!musicOn) bgMusic.pause();
+    });
+
+    soundBtn.addEventListener("click", () => {
+      soundOn = !soundOn;
+      soundBtn.textContent = soundOn ? "🔔 Sound: On" : "🔔 Sound: Off";
+    });
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
+      if (e.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
+      if (e.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+      if (e.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
+    });
+
+    document.querySelectorAll("#mobile-controls button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const dir = btn.dataset.dir;
+        if (dir === "left" && direction !== "RIGHT") direction = "LEFT";
+        if (dir === "up" && direction !== "DOWN") direction = "UP";
+        if (dir === "right" && direction !== "LEFT") direction = "RIGHT";
+        if (dir === "down" && direction !== "UP") direction = "DOWN";
+      });
+    });
+  </script>
+</body>
+</html>
